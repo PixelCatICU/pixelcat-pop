@@ -1,10 +1,10 @@
 import Foundation
-import Testing
+import XCTest
 @testable import PixelCatPop
 
 @MainActor
-struct HistoryStoreTests {
-    @Test func keepsLatestTwentyEntries() {
+final class HistoryStoreTests: XCTestCase {
+    func testKeepsLatestTwentyEntries() {
         let defaults = UserDefaults(suiteName: "PixelCatPopTests-\(UUID().uuidString)")!
         let history = HistoryStore(defaults: defaults)
 
@@ -20,12 +20,12 @@ struct HistoryStoreTests {
             )
         }
 
-        #expect(history.entries.count == 20)
-        #expect(history.entries.first?.sourceText == "source 24")
-        #expect(history.entries.last?.sourceText == "source 5")
+        XCTAssertEqual(history.entries.count, 20)
+        XCTAssertEqual(history.entries.first?.sourceText, "source 24")
+        XCTAssertEqual(history.entries.last?.sourceText, "source 5")
     }
 
-    @Test func ignoresEntriesWhenDisabled() {
+    func testIgnoresEntriesWhenDisabled() {
         let defaults = UserDefaults(suiteName: "PixelCatPopTests-\(UUID().uuidString)")!
         let history = HistoryStore(defaults: defaults)
 
@@ -39,6 +39,6 @@ struct HistoryStoreTests {
             enabled: false
         )
 
-        #expect(history.entries.isEmpty)
+        XCTAssertTrue(history.entries.isEmpty)
     }
 }

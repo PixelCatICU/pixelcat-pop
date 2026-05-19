@@ -1,14 +1,14 @@
-import Testing
+import XCTest
 @testable import PixelCatPop
 
-struct L10nTests {
-    @Test func localizesSettingsTextToChinese() {
-        #expect(L10n.text(.interfaceLanguage, languageCode: "zh-Hans") == "界面语言")
-        #expect(L10n.languageName(code: "ja", fallback: "Japanese", languageCode: "zh-Hans") == "日语")
+final class L10nTests: XCTestCase {
+    func testLocalizesSettingsTextToChinese() {
+        XCTAssertEqual(L10n.text(.interfaceLanguage, languageCode: "zh-Hans"), "界面语言")
+        XCTAssertEqual(L10n.languageName(code: "ja", fallback: "Japanese", languageCode: "zh-Hans"), "日语")
     }
 
-    @Test func fallsBackToEnglishForNonChineseLocales() {
-        #expect(L10n.text(.interfaceLanguage, languageCode: "en-US") == "Interface language")
-        #expect(L10n.languageName(code: "zh-Hans", fallback: "Chinese", languageCode: "en-US") == "Chinese")
+    func testFallsBackToEnglishForNonChineseLocales() {
+        XCTAssertEqual(L10n.text(.interfaceLanguage, languageCode: "en-US"), "Interface language")
+        XCTAssertEqual(L10n.languageName(code: "zh-Hans", fallback: "Chinese", languageCode: "en-US"), "Chinese")
     }
 }

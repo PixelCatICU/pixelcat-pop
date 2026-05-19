@@ -1,45 +1,45 @@
-import Testing
+import XCTest
 @testable import PixelCatPop
 
-struct LanguageRouterTests {
-    @Test func smartModeRoutesChineseToEnglish() {
+final class LanguageRouterTests: XCTestCase {
+    func testSmartModeRoutesChineseToEnglish() {
         let router = LanguageRouter(mode: .smart, fixedTargetLanguageCode: "ja")
 
         let request = router.request(for: "你好，世界")
 
-        #expect(request.targetLanguageCode == "en-US")
+        XCTAssertEqual(request.targetLanguageCode, "en-US")
     }
 
-    @Test func smartModeRoutesEnglishToChinese() {
+    func testSmartModeRoutesEnglishToChinese() {
         let router = LanguageRouter(mode: .smart, fixedTargetLanguageCode: "ja")
 
         let request = router.request(for: "Hello world")
 
-        #expect(request.targetLanguageCode == "zh-Hans")
+        XCTAssertEqual(request.targetLanguageCode, "zh-Hans")
     }
 
-    @Test func smartModeRoutesOtherLanguagesToConfiguredTarget() {
+    func testSmartModeRoutesOtherLanguagesToConfiguredTarget() {
         let router = LanguageRouter(mode: .smart, fixedTargetLanguageCode: "en-US")
 
         let request = router.request(for: "こんにちは世界")
 
-        #expect(request.targetLanguageCode == "en-US")
+        XCTAssertEqual(request.targetLanguageCode, "en-US")
     }
 
-    @Test func fixedModeUsesConfiguredDefaultTargetLanguage() {
+    func testFixedModeUsesConfiguredDefaultTargetLanguage() {
         let router = LanguageRouter(mode: .fixed, fixedTargetLanguageCode: "ja")
 
         let request = router.request(for: "Hello world")
 
-        #expect(request.targetLanguageCode == "ja")
+        XCTAssertEqual(request.targetLanguageCode, "ja")
     }
 
-    @Test func fixedModeKeepsDetectedSourceEvenWhenItMatchesTarget() {
+    func testFixedModeKeepsDetectedSourceEvenWhenItMatchesTarget() {
         let router = LanguageRouter(mode: .fixed, fixedTargetLanguageCode: "en-US")
 
         let request = router.request(for: "Hello world")
 
-        #expect(request.sourceLanguageCode == "en")
-        #expect(request.targetLanguageCode == "en-US")
+        XCTAssertEqual(request.sourceLanguageCode, "en")
+        XCTAssertEqual(request.targetLanguageCode, "en-US")
     }
 }

@@ -93,6 +93,11 @@ final class TranslationViewModel: ObservableObject {
                 guard !Task.isCancelled else { return }
                 await MainActor.run {
                     guard self.activeRequest == request else { return }
+                    if let fallbackResult = self.fallbackResult(for: request, error: error) {
+                        self.complete(fallbackResult)
+                        return
+                    }
+
                     self.fail(error.localizedDescription)
                 }
             }
@@ -132,5 +137,46 @@ final class TranslationViewModel: ObservableObject {
     private func isSameLanguageFamily(_ source: String, _ target: String) -> Bool {
         if source == target { return true }
         return source.hasPrefix("zh") && target.hasPrefix("zh")
+    }
+
+    private func fallbackResult(for request: TranslationRequest, error: Error) -> TranslationResult? {
+        guard error.localizedDescription.localizedCaseInsensitiveContains("unable to translate"),
+              shouldPreserveOriginalText(request.sourceText) else {
+            return nil
+        }
+
+        return TranslationResult(
+            sourceText: request.sourceText,
+            translatedText: request.sourceText,
+            sourceLanguageCode: request.sourceLanguageCode,
+            targetLanguageCode: request.targetLanguageCode
+        )
+    }
+
+    private func shouldPreserveOriginalText(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed.count <= 64 else {
+            return false
+        }
+
+        if trimmed.contains(where: { $0.isWhitespace || $0.isNewline }) {
+            return false
+        }
+
+        if trimmed.contains("://") || trimmed.contains("@") {
+            return true
+        }
+
+        let letters = trimmed.filter(\.isLetter)
+        guard !letters.isEmpty else {
+            return true
+        }
+
+        let uppercaseCount = letters.filter(\.isUppercase).count
+        let lowercaseCount = letters.filter(\.isLowercase).count
+        let hasDigit = trimmed.contains(where: \.isNumber)
+        let hasIdentifierSeparator = trimmed.contains { "_-./#".contains($0) }
+
+        return hasDigit || hasIdentifierSeparator || (uppercaseCount > 0 && lowercaseCount > 0)
     }
 }
