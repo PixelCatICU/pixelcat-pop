@@ -117,12 +117,27 @@ swift run PixelCatPop
 ## 项目结构
 
 ```text
-Sources/PixelCatPop/                 Swift 源码
+Sources/PixelCatPop/App/             应用入口、AppDelegate、菜单栏生命周期
+Sources/PixelCatPop/Clipboard/       剪贴板读取和双击 Command-C 触发监听
+Sources/PixelCatPop/Settings/        设置存储和设置界面
+Sources/PixelCatPop/Shared/          共享模型、本地化、品牌资源和通用视图
+Sources/PixelCatPop/Screenshot/      截图选择、截图捕获和标注编辑器
+Sources/PixelCatPop/Translation/     翻译服务、语言路由、翻译面板和历史记录
 Sources/PixelCatPop/Resources/       图标和资源文件
-Tests/PixelCatPopTests/              测试
+Tests/PixelCatPopTests/              按功能域组织的测试
 Scripts/package-app.sh               macOS .app 打包脚本
 .github/workflows/ci.yml             GitHub Actions 工作流
 ```
+
+后续新增大功能时优先按功能域建目录，例如：
+
+```text
+Sources/PixelCatPop/Recording/           录屏、系统声音、麦克风和视频写入
+Sources/PixelCatPop/InteractionEffects/  鼠标点击声、键盘输入声、波纹和 Zoom 效果
+Sources/PixelCatPop/Permissions/         屏幕录制、麦克风、辅助功能等权限引导
+```
+
+当前仍保留单个 SwiftPM target，避免早期拆分模块带来资源归属和访问级别成本。等录屏、截图、翻译等功能边界稳定后，再考虑拆成独立 library target。
 
 ## 工作流
 
