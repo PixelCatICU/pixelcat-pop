@@ -4,6 +4,7 @@ import XCTest
 final class L10nTests: XCTestCase {
     func testLocalizesSettingsTextToChinese() {
         XCTAssertEqual(L10n.text(.interfaceLanguage, languageCode: "zh-Hans"), "界面语言")
+        XCTAssertEqual(L10n.text(.appSubtitle, languageCode: "zh-Hans"), "Mac 工具箱")
         XCTAssertEqual(L10n.languageName(code: "ja", fallback: "Japanese", languageCode: "zh-Hans"), "日语")
     }
 

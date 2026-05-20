@@ -92,7 +92,7 @@ enum L10n {
 
     private static func zhText(_ key: Key) -> String {
         switch key {
-        case .appSubtitle: "剪贴板翻译"
+        case .appSubtitle: "Mac 工具箱"
         case .interfaceLanguage: "界面语言"
         case .systemLanguage: "跟随系统"
         case .chineseInterface: "中文"
@@ -142,7 +142,7 @@ enum L10n {
 
     private static func enText(_ key: Key) -> String {
         switch key {
-        case .appSubtitle: "Clipboard translation"
+        case .appSubtitle: "Mac toolbox"
         case .interfaceLanguage: "Interface language"
         case .systemLanguage: "System"
         case .chineseInterface: "Chinese"
