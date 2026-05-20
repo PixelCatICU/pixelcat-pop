@@ -90,16 +90,16 @@ yellow_pixels = 0
 for row in rows:
     for i in range(0, stride, channels):
         r, g, b = row[i], row[i + 1], row[i + 2]
-        if b > 180 and g > 120 and r < 120:
+        if 120 <= r <= 170 and 150 <= g <= 200 and b > 220:
             blue_pixels += 1
-        if g > 170 and r < 80 and b < 140:
+        if 140 <= r <= 190 and g > 200 and 130 <= b <= 190:
             green_pixels += 1
-        if r > 200 and g > 150 and b < 90:
+        if r > 220 and g > 190 and 130 <= b <= 210:
             yellow_pixels += 1
 
 if min(blue_pixels, green_pixels, yellow_pixels) < 5000:
     raise SystemExit(
-        f"snapshot does not contain expected editor image colors: "
+        f"snapshot does not contain expected Catppuccin editor image colors: "
         f"blue={blue_pixels} green={green_pixels} yellow={yellow_pixels}"
     )
 

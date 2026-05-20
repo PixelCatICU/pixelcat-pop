@@ -139,16 +139,16 @@ final class ScreenshotAnnotationController: NSObject {
         let size = NSSize(width: 520, height: 300)
         let image = NSImage(size: size)
         image.lockFocus()
-        NSColor(calibratedRed: 0.10, green: 0.13, blue: 0.16, alpha: 1).setFill()
+        CatppuccinPalette.base.setFill()
         NSRect(origin: .zero, size: size).fill()
 
-        NSColor(calibratedRed: 0.22, green: 0.60, blue: 1.0, alpha: 1).setFill()
+        CatppuccinPalette.blue.setFill()
         NSBezierPath(roundedRect: NSRect(x: 32, y: 184, width: 456, height: 72), xRadius: 8, yRadius: 8).fill()
 
-        NSColor(calibratedRed: 0.12, green: 0.84, blue: 0.46, alpha: 1).setFill()
+        CatppuccinPalette.green.setFill()
         NSBezierPath(roundedRect: NSRect(x: 32, y: 52, width: 210, height: 94), xRadius: 8, yRadius: 8).fill()
 
-        NSColor(calibratedRed: 1.0, green: 0.76, blue: 0.16, alpha: 1).setFill()
+        CatppuccinPalette.yellow.setFill()
         NSBezierPath(roundedRect: NSRect(x: 278, y: 52, width: 210, height: 94), xRadius: 8, yRadius: 8).fill()
 
         let title = "PixelCat Pop Screenshot Editor"
@@ -156,7 +156,7 @@ final class ScreenshotAnnotationController: NSObject {
             at: NSPoint(x: 52, y: 207),
             withAttributes: [
                 .font: NSFont.boldSystemFont(ofSize: 28),
-                .foregroundColor: NSColor.white
+                .foregroundColor: CatppuccinPalette.crust
             ]
         )
         image.unlockFocus()
@@ -228,13 +228,13 @@ private final class ScreenshotSelectionView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        NSColor.black.withAlphaComponent(0.34).setFill()
+        CatppuccinPalette.crust.withAlphaComponent(0.48).setFill()
         bounds.fill()
 
         guard currentRect.width > 1, currentRect.height > 1 else { return }
         NSColor.clear.setFill()
         currentRect.fill(using: .clear)
-        NSColor.systemBlue.setStroke()
+        CatppuccinPalette.blue.setStroke()
         let path = NSBezierPath(rect: currentRect)
         path.lineWidth = 2
         path.stroke()
@@ -302,10 +302,8 @@ private enum AnnotationTool: String, CaseIterable {
 
     var defaultColor: NSColor {
         switch self {
-        case .rectangle: .systemRed
-        case .arrow: .systemBlue
-        case .text: .systemYellow
-        case .mosaic: .labelColor
+        case .rectangle, .arrow, .text: CatppuccinPalette.red
+        case .mosaic: CatppuccinPalette.overlay0
         }
     }
 }
@@ -444,10 +442,14 @@ private final class ScreenshotEditorViewController: NSViewController {
         toolbar.alignment = .centerY
         toolbar.spacing = 8
         toolbar.translatesAutoresizingMaskIntoConstraints = false
+        toolbar.wantsLayer = true
+        toolbar.layer?.backgroundColor = CatppuccinPalette.mantle.withAlphaComponent(0.72).cgColor
+        toolbar.layer?.cornerRadius = 8
+        toolbar.edgeInsets = NSEdgeInsets(top: 4, left: 6, bottom: 4, right: 6)
 
         for tool in AnnotationTool.allCases {
             let button = NSButton(
-                image: Self.symbolImage(tool.systemImageName, tool.title, color: .secondaryLabelColor),
+                image: Self.symbolImage(tool.systemImageName, tool.title, color: CatppuccinPalette.subtext1),
                 target: self,
                 action: #selector(selectTool(_:))
             )
@@ -524,7 +526,7 @@ private final class ScreenshotEditorViewController: NSViewController {
     }
 
     private func toolbarButton(_ symbol: String, _ help: String, _ action: Selector, keyEquivalent: String = "") -> NSButton {
-        let button = NSButton(image: Self.symbolImage(symbol, help, color: .secondaryLabelColor), target: self, action: action)
+        let button = NSButton(image: Self.symbolImage(symbol, help, color: CatppuccinPalette.subtext1), target: self, action: action)
         button.bezelStyle = .texturedRounded
         button.toolTip = help
         button.keyEquivalent = keyEquivalent
@@ -580,7 +582,7 @@ private final class ScreenshotEditorViewController: NSViewController {
         let label = NSTextField(labelWithString: "100%")
         label.alignment = .center
         label.font = .monospacedDigitSystemFont(ofSize: 12, weight: .medium)
-        label.textColor = .secondaryLabelColor
+        label.textColor = CatppuccinPalette.subtext1
         label.widthAnchor.constraint(equalToConstant: 44).isActive = true
         zoomLabel = label
         return label
@@ -647,14 +649,14 @@ private final class ScreenshotEditorViewController: NSViewController {
     private func updateToolButtonAppearance(_ button: NSButton) {
         let tool = button.identifier.flatMap { AnnotationTool(rawValue: $0.rawValue) }
         if button.state == .on {
-            let tint = tool == .mosaic ? NSColor.controlAccentColor : canvasView.annotationColor
+            let tint = tool == .mosaic ? CatppuccinPalette.mauve : canvasView.annotationColor
             if let tool {
                 button.image = Self.symbolImage(tool.systemImageName, tool.title, color: tint)
             }
-            button.bezelColor = tint.withAlphaComponent(0.18)
+            button.bezelColor = tint.withAlphaComponent(0.22)
         } else {
             if let tool {
-                button.image = Self.symbolImage(tool.systemImageName, tool.title, color: .secondaryLabelColor)
+                button.image = Self.symbolImage(tool.systemImageName, tool.title, color: CatppuccinPalette.subtext1)
             }
             button.bezelColor = nil
         }
@@ -735,6 +737,11 @@ private final class PaddedCanvasDocumentView: NSView {
 
     override var isFlipped: Bool { true }
 
+    override func draw(_ dirtyRect: NSRect) {
+        CatppuccinPalette.crust.setFill()
+        bounds.fill()
+    }
+
     override func layout() {
         super.layout()
         let canvasSize = NSSize(
@@ -785,7 +792,7 @@ private final class ColorSwatchButton: NSButton {
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
         let swatchRect = bounds.insetBy(dx: 9, dy: 6)
-        NSColor.separatorColor.setStroke()
+        CatppuccinPalette.surface1.setStroke()
         let path = NSBezierPath(ovalIn: swatchRect)
         path.lineWidth = 1
         color.setFill()
@@ -799,12 +806,14 @@ private final class ColorPaletteViewController: NSViewController {
     private let onSelect: (NSColor) -> Void
     private var colorButtons: [ColorChoiceButton] = []
     private let colors: [NSColor] = [
-        .systemRed,
-        .systemBlue,
-        .systemYellow,
-        .systemGreen,
-        .black,
-        .white
+        CatppuccinPalette.red,
+        CatppuccinPalette.peach,
+        CatppuccinPalette.yellow,
+        CatppuccinPalette.green,
+        CatppuccinPalette.teal,
+        CatppuccinPalette.blue,
+        CatppuccinPalette.mauve,
+        CatppuccinPalette.text
     ]
 
     init(selectedColor: NSColor, onSelect: @escaping (NSColor) -> Void) {
@@ -823,6 +832,8 @@ private final class ColorPaletteViewController: NSViewController {
         root.alignment = .centerY
         root.spacing = 8
         root.edgeInsets = NSEdgeInsets(top: 10, left: 10, bottom: 10, right: 10)
+        root.wantsLayer = true
+        root.layer?.backgroundColor = CatppuccinPalette.base.cgColor
 
         for color in colors {
             let button = ColorChoiceButton(color: color)
@@ -839,7 +850,7 @@ private final class ColorPaletteViewController: NSViewController {
         customColor.action = #selector(selectCustomColor(_:))
         root.addArrangedSubview(customColor)
         view = root
-        preferredContentSize = NSSize(width: 300, height: 48)
+        preferredContentSize = NSSize(width: 360, height: 48)
     }
 
     @objc private func selectColor(_ sender: ColorChoiceButton) {
@@ -876,7 +887,7 @@ private final class ColorChoiceButton: NSButton {
         NSColor.clear.setFill()
         bounds.fill()
         let outer = NSBezierPath(ovalIn: bounds.insetBy(dx: 2, dy: 2))
-        (state == .on ? NSColor.controlAccentColor : NSColor.separatorColor).setStroke()
+        (state == .on ? CatppuccinPalette.mauve : CatppuccinPalette.surface1).setStroke()
         outer.lineWidth = state == .on ? 2 : 1
         outer.stroke()
 
@@ -892,7 +903,7 @@ private final class ScreenshotAnnotationCanvasView: NSView {
             onToolChange?(tool)
         }
     }
-    var annotationColor: NSColor = .systemRed {
+    var annotationColor: NSColor = CatppuccinPalette.red {
         didSet {
             applyColorToSelectedItem()
         }
@@ -1250,13 +1261,13 @@ private final class ScreenshotAnnotationCanvasView: NSView {
     }
 
     private func drawSelection(for item: AnnotationItem) {
-        NSColor.systemBlue.setStroke()
+        CatppuccinPalette.mauve.setStroke()
         let path = NSBezierPath(rect: item.bounds)
         path.lineWidth = 1.5
         path.setLineDash([4, 3], count: 2, phase: 0)
         path.stroke()
 
-        NSColor.systemBlue.setFill()
+        CatppuccinPalette.mauve.setFill()
         handleRect(for: item).fill()
     }
 
@@ -1308,7 +1319,7 @@ private final class ScreenshotAnnotationCanvasView: NSView {
         guard let source = image.cgImage(forProposedRect: nil, context: nil, hints: nil),
               let crop = source.cropping(to: cgRect(from: rect, in: source))
         else {
-            NSColor.black.withAlphaComponent(0.35).setFill()
+            CatppuccinPalette.surface0.withAlphaComponent(0.58).setFill()
             rect.fill()
             return
         }
