@@ -10,12 +10,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var panelController = FloatingPanelController(viewModel: viewModel, settings: settings)
     private lazy var screenshotController = ScreenshotAnnotationController(settings: settings)
     private lazy var recordingController = RecordingController(settings: settings)
+    private let systemMonitor = SystemMonitor()
     private let clipboardReader = ClipboardReader()
     private let triggerMonitor = ClipboardTriggerMonitor()
 
     private var statusItem: NSStatusItem?
     private var settingsWindow: NSWindow?
     private var settingsCancellable: AnyCancellable?
+    private var avatarMetricCancellable: AnyCancellable?
+    private var systemMonitorTimer: Timer?
+    private var systemSnapshot: SystemSnapshot?
+    private weak var cpuMenuItem: NSMenuItem?
+    private weak var memoryMenuItem: NSMenuItem?
+    private weak var diskMenuItem: NSMenuItem?
+    private weak var networkMenuItem: NSMenuItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         ProcessInfo.processInfo.disableAutomaticTermination("PixelCat Pop runs as a menu bar utility.")
@@ -26,6 +34,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.refreshLocalizedChrome()
             }
         }
+        avatarMetricCancellable = settings.$avatarColorMetric.dropFirst().sink { [weak self] _ in
+            Task { @MainActor in
+                self?.refreshStatusBarImage()
+            }
+        }
+        startSystemMonitoring()
 
         triggerMonitor.onDoubleCopy = { [weak self] in
             self?.handleDoubleCopy()
@@ -43,11 +57,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         triggerMonitor.stop()
+        systemMonitorTimer?.invalidate()
     }
 
     private func installStatusMenu() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        item.button?.image = BrandAssets.statusBarImage()
+        item.button?.image = statusBarImage()
         item.button?.imagePosition = .imageOnly
 
         item.menu = makeStatusMenu()
@@ -61,6 +76,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem(title: L10n.text(.translateClipboard, language: language), action: #selector(translateClipboard), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: L10n.text(.annotateScreenshot, language: language), action: #selector(annotateScreenshot), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: recordingMenuTitle(language: language), action: #selector(toggleScreenRecording), keyEquivalent: ""))
+        menu.addItem(.separator())
+        let cpu = disabledMenuItem("")
+        let memory = disabledMenuItem("")
+        let disk = disabledMenuItem("")
+        let network = disabledMenuItem("")
+        menu.addItem(cpu)
+        menu.addItem(memory)
+        menu.addItem(disk)
+        menu.addItem(network)
+        cpuMenuItem = cpu
+        memoryMenuItem = memory
+        diskMenuItem = disk
+        networkMenuItem = network
+        updateSystemMenuItems(language: language)
         menu.addItem(NSMenuItem(title: L10n.text(.settings, language: language), action: #selector(openSettings), keyEquivalent: ","))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: L10n.text(.quit, language: language), action: #selector(quit), keyEquivalent: "q"))
@@ -71,6 +100,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func refreshLocalizedChrome() {
         statusItem?.menu = makeStatusMenu()
         settingsWindow?.title = L10n.text(.settingsWindowTitle, language: settings.interfaceLanguage)
+        refreshStatusBarImage()
     }
 
     private func refreshRecordingMenuTitle() {
@@ -79,6 +109,77 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func recordingMenuTitle(language: AppLanguage) -> String {
         L10n.text(recordingController.isRecording ? .stopScreenRecording : .startScreenRecording, language: language)
+    }
+
+    private func disabledMenuItem(_ title: String) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        item.isEnabled = false
+        return item
+    }
+
+    private func startSystemMonitoring() {
+        updateSystemSnapshot()
+        systemMonitorTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.updateSystemSnapshot()
+            }
+        }
+    }
+
+    private func updateSystemSnapshot() {
+        systemSnapshot = systemMonitor.sample()
+        updateSystemMenuItems(language: settings.interfaceLanguage)
+        refreshStatusBarImage()
+    }
+
+    private func updateSystemMenuItems(language: AppLanguage) {
+        guard let snapshot = systemSnapshot else {
+            cpuMenuItem?.title = "\(L10n.text(.cpuUsage, language: language)): --"
+            memoryMenuItem?.title = "\(L10n.text(.memoryUsage, language: language)): --"
+            diskMenuItem?.title = "\(L10n.text(.diskUsage, language: language)): --"
+            networkMenuItem?.title = "\(L10n.text(.networkUsage, language: language)): --"
+            return
+        }
+
+        cpuMenuItem?.title = "\(L10n.text(.cpuUsage, language: language)): \(formatPercent(snapshot.cpuUsage))"
+        memoryMenuItem?.title = "\(L10n.text(.memoryUsage, language: language)): \(formatPercent(snapshot.memoryUsage))"
+        diskMenuItem?.title = "\(L10n.text(.diskUsage, language: language)): \(formatPercent(snapshot.diskUsage))"
+        networkMenuItem?.title = "\(L10n.text(.networkUsage, language: language)): ↓ \(formatBytesPerSecond(snapshot.networkDownloadRate))  ↑ \(formatBytesPerSecond(snapshot.networkUploadRate))"
+    }
+
+    private func refreshStatusBarImage() {
+        statusItem?.button?.image = statusBarImage()
+    }
+
+    private func statusBarImage() -> NSImage {
+        guard let snapshot = systemSnapshot else {
+            return BrandAssets.statusBarImage(tintColor: CatppuccinPalette.blue)
+        }
+
+        let ratio: Double
+        switch settings.avatarColorMetric {
+        case .cpu:
+            ratio = snapshot.cpuUsage
+        case .memory:
+            ratio = snapshot.memoryUsage
+        }
+
+        return BrandAssets.statusBarImage(tintColor: CatppuccinPalette.loadColor(for: ratio))
+    }
+
+    private func formatPercent(_ ratio: Double) -> String {
+        "\(Int((ratio * 100).rounded()))%"
+    }
+
+    private func formatBytesPerSecond(_ bytesPerSecond: UInt64) -> String {
+        let value = Double(bytesPerSecond)
+        if value >= 1_048_576 {
+            return String(format: "%.1f MB/s", value / 1_048_576)
+        }
+        if value >= 1_024 {
+            return String(format: "%.0f KB/s", value / 1_024)
+        }
+        return "\(bytesPerSecond) B/s"
     }
 
     private func handleDoubleCopy() {

@@ -50,6 +50,11 @@ struct SettingsView: View {
                 Text(L10n.text(.screenCenter, language: language)).tag(SettingsStore.PanelPlacement.center)
             }
 
+            Picker(L10n.text(.avatarColorMetric, language: language), selection: $settings.avatarColorMetric) {
+                Text(L10n.text(.cpuUsage, language: language)).tag(SettingsStore.AvatarColorMetric.cpu)
+                Text(L10n.text(.memoryUsage, language: language)).tag(SettingsStore.AvatarColorMetric.memory)
+            }
+
             Toggle(L10n.text(.saveTranslationHistory, language: language), isOn: $settings.savesTranslationHistory)
 
             HStack {

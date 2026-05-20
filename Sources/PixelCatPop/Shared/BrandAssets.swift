@@ -14,7 +14,7 @@ enum BrandAssets {
         return image
     }
 
-    static func statusBarImage() -> NSImage {
+    static func statusBarImage(tintColor: NSColor? = nil) -> NSImage {
         let image: NSImage
         if let url = Bundle.module.url(forResource: menuBarLogoName, withExtension: "svg"),
            let loadedImage = NSImage(contentsOf: url) {
@@ -25,9 +25,21 @@ enum BrandAssets {
                 accessibilityDescription: "PixelCat Pop"
             ) ?? NSImage()
         }
-        image.isTemplate = true
         image.size = NSSize(width: 18, height: 18)
-        return image
+
+        guard let tintColor else {
+            image.isTemplate = true
+            return image
+        }
+
+        let tintedImage = NSImage(size: image.size)
+        tintedImage.lockFocus()
+        image.draw(in: NSRect(origin: .zero, size: image.size), from: .zero, operation: .sourceOver, fraction: 1)
+        tintColor.set()
+        NSRect(origin: .zero, size: image.size).fill(using: .sourceAtop)
+        tintedImage.unlockFocus()
+        tintedImage.isTemplate = false
+        return tintedImage
     }
 }
 

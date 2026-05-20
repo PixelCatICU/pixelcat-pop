@@ -26,6 +26,10 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(opensAtLogin, forKey: Keys.opensAtLogin) }
     }
 
+    @Published var avatarColorMetric: AvatarColorMetric {
+        didSet { defaults.set(avatarColorMetric.rawValue, forKey: Keys.avatarColorMetric) }
+    }
+
     private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {
@@ -39,6 +43,8 @@ final class SettingsStore: ObservableObject {
         panelPlacement = PanelPlacement(rawValue: placementValue) ?? .center
         savesTranslationHistory = defaults.object(forKey: Keys.savesTranslationHistory) as? Bool ?? true
         opensAtLogin = defaults.object(forKey: Keys.opensAtLogin) as? Bool ?? false
+        let metricValue = defaults.string(forKey: Keys.avatarColorMetric) ?? AvatarColorMetric.cpu.rawValue
+        avatarColorMetric = AvatarColorMetric(rawValue: metricValue) ?? .cpu
     }
 
     var router: LanguageRouter {
@@ -55,6 +61,13 @@ final class SettingsStore: ObservableObject {
         var id: String { rawValue }
     }
 
+    enum AvatarColorMetric: String, CaseIterable, Identifiable {
+        case cpu
+        case memory
+
+        var id: String { rawValue }
+    }
+
     private enum Keys {
         static let interfaceLanguage = "interfaceLanguage"
         static let targetLanguageMode = "targetLanguageMode"
@@ -62,5 +75,6 @@ final class SettingsStore: ObservableObject {
         static let panelPlacement = "panelPlacement"
         static let savesTranslationHistory = "savesTranslationHistory"
         static let opensAtLogin = "opensAtLogin"
+        static let avatarColorMetric = "avatarColorMetric"
     }
 }

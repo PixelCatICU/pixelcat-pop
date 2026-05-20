@@ -16,4 +16,9 @@ final class L10nTests: XCTestCase {
         XCTAssertEqual(L10n.text(.startScreenRecording, languageCode: "zh-Hans"), "开始录屏")
         XCTAssertEqual(L10n.text(.stopScreenRecording, languageCode: "en-US"), "Stop Screen Recording")
     }
+
+    func testLocalizesSystemMonitorLabels() {
+        XCTAssertEqual(L10n.text(.avatarColorMetric, languageCode: "zh-Hans"), "头像颜色依据")
+        XCTAssertEqual(L10n.text(.memoryUsage, languageCode: "en-US"), "Memory")
+    }
 }

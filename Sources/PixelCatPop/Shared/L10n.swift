@@ -14,6 +14,11 @@ enum L10n {
         case panelPosition
         case nearMouse
         case screenCenter
+        case avatarColorMetric
+        case cpuUsage
+        case memoryUsage
+        case diskUsage
+        case networkUsage
         case saveTranslationHistory
         case historyEntries
         case clear
@@ -99,6 +104,11 @@ enum L10n {
         case .panelPosition: "弹窗位置"
         case .nearMouse: "鼠标附近"
         case .screenCenter: "屏幕中央"
+        case .avatarColorMetric: "头像颜色依据"
+        case .cpuUsage: "CPU"
+        case .memoryUsage: "内存"
+        case .diskUsage: "硬盘"
+        case .networkUsage: "网络"
         case .saveTranslationHistory: "保存翻译历史"
         case .historyEntries: "历史条数"
         case .clear: "清除"
@@ -144,6 +154,11 @@ enum L10n {
         case .panelPosition: "Panel position"
         case .nearMouse: "Near mouse"
         case .screenCenter: "Screen center"
+        case .avatarColorMetric: "Avatar color metric"
+        case .cpuUsage: "CPU"
+        case .memoryUsage: "Memory"
+        case .diskUsage: "Disk"
+        case .networkUsage: "Network"
         case .saveTranslationHistory: "Save translation history"
         case .historyEntries: "History entries"
         case .clear: "Clear"
