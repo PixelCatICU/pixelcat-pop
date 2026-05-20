@@ -313,7 +313,7 @@ private enum AnnotationTool: String, CaseIterable {
 private enum AnnotationItem {
     case rectangle(CGRect, NSColor)
     case arrow(CGPoint, CGPoint, NSColor)
-    case text(String, CGPoint, NSColor)
+    case text(String, CGPoint, NSColor, CGFloat)
     case mosaic(CGRect, CGFloat)
 
     var bounds: CGRect {
@@ -327,8 +327,8 @@ private enum AnnotationItem {
                 width: abs(start.x - end.x),
                 height: abs(start.y - end.y)
             ).insetBy(dx: -12, dy: -12)
-        case .text(let text, let origin, _):
-            let size = (text as NSString).size(withAttributes: [.font: NSFont.boldSystemFont(ofSize: 24)])
+        case .text(let text, let origin, _, let fontSize):
+            let size = (text as NSString).size(withAttributes: [.font: NSFont.boldSystemFont(ofSize: fontSize)])
             return CGRect(origin: origin, size: size).insetBy(dx: -6, dy: -5)
         }
     }
@@ -343,8 +343,8 @@ private enum AnnotationItem {
                 CGPoint(x: end.x + delta.x, y: end.y + delta.y),
                 color
             )
-        case .text(let text, let origin, let color):
-            self = .text(text, CGPoint(x: origin.x + delta.x, y: origin.y + delta.y), color)
+        case .text(let text, let origin, let color, let fontSize):
+            self = .text(text, CGPoint(x: origin.x + delta.x, y: origin.y + delta.y), color, fontSize)
         case .mosaic(let rect, let strength):
             self = .mosaic(rect.offsetBy(dx: delta.x, dy: delta.y), strength)
         }
@@ -369,16 +369,22 @@ private enum AnnotationItem {
             self = .rectangle(rect, color)
         case .arrow(let start, let end, _):
             self = .arrow(start, end, color)
-        case .text(let text, let origin, _):
-            self = .text(text, origin, color)
+        case .text(let text, let origin, _, let fontSize):
+            self = .text(text, origin, color, fontSize)
         case .mosaic:
             break
         }
     }
 
     mutating func updateText(_ text: String) {
-        if case .text(_, let origin, let color) = self {
-            self = .text(text, origin, color)
+        if case .text(_, let origin, let color, let fontSize) = self {
+            self = .text(text, origin, color, fontSize)
+        }
+    }
+
+    mutating func updateFontSize(_ fontSize: CGFloat) {
+        if case .text(let text, let origin, let color, _) = self {
+            self = .text(text, origin, color, fontSize)
         }
     }
 
@@ -410,6 +416,7 @@ private final class ScreenshotEditorViewController: NSViewController {
     private var colorButton: ColorSwatchButton?
     private var colorPopover: NSPopover?
     private var mosaicStrengthSlider: NSSlider?
+    private var textSizeSlider: NSSlider?
     private var paddedDocumentView: PaddedCanvasDocumentView?
     private var zoomLabel: NSTextField?
 
@@ -457,6 +464,7 @@ private final class ScreenshotEditorViewController: NSViewController {
         toolbar.addArrangedSubview(separator())
         toolbar.addArrangedSubview(colorSwatchButton())
         toolbar.addArrangedSubview(mosaicStrengthControl())
+        toolbar.addArrangedSubview(textSizeControl())
         toolbar.addArrangedSubview(separator())
         toolbar.addArrangedSubview(toolbarButton("arrow.uturn.backward", "Undo", #selector(undo), keyEquivalent: "z"))
         toolbar.addArrangedSubview(toolbarButton("trash", "Clear", #selector(clear)))
@@ -502,6 +510,9 @@ private final class ScreenshotEditorViewController: NSViewController {
         }
         canvasView.onToolChange = { [weak self] _ in
             self?.updateToolSelection()
+        }
+        canvasView.onTextSizeChange = { [weak self] fontSize in
+            self?.textSizeSlider?.doubleValue = Double(fontSize)
         }
     }
 
@@ -555,6 +566,16 @@ private final class ScreenshotEditorViewController: NSViewController {
         return slider
     }
 
+    private func textSizeControl() -> NSSlider {
+        let slider = NSSlider(value: Double(canvasView.annotationTextSize), minValue: 12, maxValue: 64, target: self, action: #selector(changeTextSize(_:)))
+        slider.toolTip = "Text Size"
+        slider.controlSize = .small
+        slider.frame = NSRect(x: 0, y: 0, width: 82, height: 24)
+        slider.isHidden = canvasView.tool != .text
+        textSizeSlider = slider
+        return slider
+    }
+
     private func zoomText() -> NSTextField {
         let label = NSTextField(labelWithString: "100%")
         label.alignment = .center
@@ -593,6 +614,11 @@ private final class ScreenshotEditorViewController: NSViewController {
         view.window?.makeFirstResponder(canvasView)
     }
 
+    @objc private func changeTextSize(_ sender: NSSlider) {
+        canvasView.annotationTextSize = CGFloat(sender.doubleValue)
+        view.window?.makeFirstResponder(canvasView)
+    }
+
     @objc private func undo() {
         canvasView.undo()
     }
@@ -611,6 +637,7 @@ private final class ScreenshotEditorViewController: NSViewController {
 
     private func updateToolSelection() {
         mosaicStrengthSlider?.isHidden = canvasView.tool != .mosaic
+        textSizeSlider?.isHidden = canvasView.tool != .text
         for (tool, button) in toolButtons {
             button.state = tool == canvasView.tool ? .on : .off
             updateToolButtonAppearance(button)
@@ -770,12 +797,13 @@ private final class ColorSwatchButton: NSButton {
 private final class ColorPaletteViewController: NSViewController {
     private let selectedColor: NSColor
     private let onSelect: (NSColor) -> Void
+    private var colorButtons: [ColorChoiceButton] = []
     private let colors: [NSColor] = [
         .systemRed,
         .systemBlue,
         .systemYellow,
         .systemGreen,
-        .labelColor,
+        .black,
         .white
     ]
 
@@ -801,6 +829,7 @@ private final class ColorPaletteViewController: NSViewController {
             button.state = color.isVisuallyEqual(to: selectedColor) ? .on : .off
             button.target = self
             button.action = #selector(selectColor(_:))
+            colorButtons.append(button)
             root.addArrangedSubview(button)
         }
 
@@ -814,10 +843,12 @@ private final class ColorPaletteViewController: NSViewController {
     }
 
     @objc private func selectColor(_ sender: ColorChoiceButton) {
+        colorButtons.forEach { $0.state = $0 === sender ? .on : .off }
         onSelect(sender.color)
     }
 
     @objc private func selectCustomColor(_ sender: NSColorWell) {
+        colorButtons.forEach { $0.state = .off }
         onSelect(sender.color)
     }
 }
@@ -866,9 +897,15 @@ private final class ScreenshotAnnotationCanvasView: NSView {
             applyColorToSelectedItem()
         }
     }
+    var annotationTextSize: CGFloat = 24 {
+        didSet {
+            applyTextSizeToSelectedItem()
+        }
+    }
     var mosaicBlockSize: CGFloat = 12
     var onZoomChange: ((CGFloat) -> Void)?
     var onToolChange: ((AnnotationTool) -> Void)?
+    var onTextSizeChange: ((CGFloat) -> Void)?
     var imageSize: NSSize { image.size }
 
     private let image: NSImage
@@ -1108,7 +1145,7 @@ private final class ScreenshotAnnotationCanvasView: NSView {
                 items[editingTextIndex].updateText(text)
                 selectedIndex = editingTextIndex
             } else {
-                items.append(.text(text, sender.frame.origin, annotationColor))
+                items.append(.text(text, sender.frame.origin, annotationColor, annotationTextSize))
                 selectedIndex = items.indices.last
             }
         }
@@ -1121,6 +1158,15 @@ private final class ScreenshotAnnotationCanvasView: NSView {
         guard let selectedIndex, items.indices.contains(selectedIndex) else { return }
         pushUndo()
         items[selectedIndex].recolor(annotationColor)
+        needsDisplay = true
+    }
+
+    private func applyTextSizeToSelectedItem() {
+        guard let selectedIndex, items.indices.contains(selectedIndex),
+              case .text = items[selectedIndex]
+        else { return }
+        pushUndo()
+        items[selectedIndex].updateFontSize(annotationTextSize)
         needsDisplay = true
     }
 
@@ -1154,9 +1200,11 @@ private final class ScreenshotAnnotationCanvasView: NSView {
 
     private func beginEditingText(at index: Int) {
         guard items.indices.contains(index),
-              case .text(let text, let origin, _) = items[index]
+              case .text(let text, let origin, _, let fontSize) = items[index]
         else { return }
 
+        annotationTextSize = fontSize
+        onTextSizeChange?(fontSize)
         let input = NSTextField(frame: NSRect(x: origin.x, y: origin.y, width: max(180, items[index].bounds.width + 16), height: 28))
         input.stringValue = text
         input.target = self
@@ -1227,9 +1275,9 @@ private final class ScreenshotAnnotationCanvasView: NSView {
             path.lineWidth = 4
             path.stroke()
             drawArrowHead(from: start, to: end, color: color)
-        case .text(let text, let origin, let color):
+        case .text(let text, let origin, let color, let fontSize):
             let attributes: [NSAttributedString.Key: Any] = [
-                .font: NSFont.boldSystemFont(ofSize: 24),
+                .font: NSFont.boldSystemFont(ofSize: fontSize),
                 .foregroundColor: color
             ]
             text.draw(at: origin, withAttributes: attributes)
