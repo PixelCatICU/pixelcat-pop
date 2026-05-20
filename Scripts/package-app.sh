@@ -21,6 +21,8 @@ if [ -d "$BUILD_DIR/PixelCatPop_PixelCatPop.resources" ]; then
   cp -R "$BUILD_DIR/PixelCatPop_PixelCatPop.resources/." "$RESOURCES_DIR/"
 fi
 
+cp "$ROOT_DIR/Sources/PixelCatPop/Resources/PixelCatPop.icns" "$RESOURCES_DIR/PixelCatPop.icns"
+
 cat > "$CONTENTS_DIR/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -32,6 +34,8 @@ cat > "$CONTENTS_DIR/Info.plist" <<'PLIST'
   <string>PixelCatPop</string>
   <key>CFBundleIdentifier</key>
   <string>icu.pixelcat.PixelCatPop</string>
+  <key>CFBundleIconFile</key>
+  <string>PixelCatPop</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>
@@ -48,6 +52,8 @@ cat > "$CONTENTS_DIR/Info.plist" <<'PLIST'
   <true/>
   <key>NSHighResolutionCapable</key>
   <true/>
+  <key>NSScreenCaptureUsageDescription</key>
+  <string>PixelCat Pop needs screen capture access to let you select, annotate, copy, and save screenshots.</string>
 </dict>
 </plist>
 PLIST

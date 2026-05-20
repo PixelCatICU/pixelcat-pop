@@ -21,6 +21,7 @@ enum L10n {
         case loginItemReserved
         case inputTranslation
         case translateClipboard
+        case annotateScreenshot
         case checkTranslationLanguages
         case settings
         case quit
@@ -101,6 +102,7 @@ enum L10n {
         case .loginItemReserved: "登录项会在签名后的应用包阶段接入。"
         case .inputTranslation: "输入翻译"
         case .translateClipboard: "翻译剪贴板"
+        case .annotateScreenshot: "截图标注"
         case .checkTranslationLanguages: "检查语言包"
         case .settings: "设置..."
         case .quit: "退出"
@@ -141,6 +143,7 @@ enum L10n {
         case .loginItemReserved: "Login item wiring is reserved for the signed app bundle stage."
         case .inputTranslation: "Input Translation"
         case .translateClipboard: "Translate Clipboard"
+        case .annotateScreenshot: "Annotate Screenshot"
         case .checkTranslationLanguages: "Check Languages"
         case .settings: "Settings..."
         case .quit: "Quit"

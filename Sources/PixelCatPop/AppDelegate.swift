@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var history = HistoryStore()
     private lazy var viewModel = TranslationViewModel(settings: settings, history: history)
     private lazy var panelController = FloatingPanelController(viewModel: viewModel, settings: settings)
+    private lazy var screenshotController = ScreenshotAnnotationController(settings: settings)
     private let clipboardReader = ClipboardReader()
     private let triggerMonitor = ClipboardTriggerMonitor()
 
@@ -29,6 +30,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.handleDoubleCopy()
         }
         triggerMonitor.start()
+
+        if ProcessInfo.processInfo.environment["PIXELCAT_SCREENSHOT_EDITOR_TEST"] == "1" {
+            screenshotController.openTestEditor(snapshotPath: ProcessInfo.processInfo.environment["PIXELCAT_SCREENSHOT_EDITOR_SNAPSHOT"])
+        }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -53,7 +58,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         menu.addItem(NSMenuItem(title: L10n.text(.inputTranslation, language: language), action: #selector(openInputTranslation), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: L10n.text(.translateClipboard, language: language), action: #selector(translateClipboard), keyEquivalent: ""))
-        menu.addItem(NSMenuItem(title: L10n.text(.checkTranslationLanguages, language: language), action: #selector(checkTranslationLanguages), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: L10n.text(.annotateScreenshot, language: language), action: #selector(annotateScreenshot), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: L10n.text(.settings, language: language), action: #selector(openSettings), keyEquivalent: ","))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: L10n.text(.quit, language: language), action: #selector(quit), keyEquivalent: "q"))
@@ -79,23 +84,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panelController.showInput()
     }
 
-    @objc private func checkTranslationLanguages() {
-        let translateAppURL = URL(fileURLWithPath: "/System/Applications/Translate.app")
-        NSWorkspace.shared.open(translateAppURL)
+    @objc private func annotateScreenshot() {
+        screenshotController.start()
     }
 
     @objc private func openSettings() {
         if settingsWindow == nil {
             let view = SettingsView(settings: settings, history: history)
             let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 500, height: 330),
+                contentRect: NSRect(x: 0, y: 0, width: 500, height: 360),
                 styleMask: [.titled, .closable, .miniaturizable],
                 backing: .buffered,
                 defer: false
             )
             window.title = L10n.text(.settingsWindowTitle, language: settings.interfaceLanguage)
+            window.backgroundColor = .clear
+            window.isOpaque = false
             window.center()
-            window.contentView = NSHostingView(rootView: view)
+            window.contentView = makeGlassContentView(rootView: view, material: .sidebar, blendingMode: .withinWindow)
             settingsWindow = window
         }
 
@@ -105,5 +111,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func quit() {
         NSApp.terminate(nil)
+    }
+
+    private func makeGlassContentView<Content: View>(
+        rootView: Content,
+        material: NSVisualEffectView.Material,
+        blendingMode: NSVisualEffectView.BlendingMode
+    ) -> NSView {
+        let glassView = GlassEffectView(material: material, blendingMode: blendingMode)
+        let hostingView = NSHostingView(rootView: rootView)
+        hostingView.translatesAutoresizingMaskIntoConstraints = false
+        hostingView.layer?.backgroundColor = NSColor.clear.cgColor
+
+        glassView.addSubview(hostingView)
+        NSLayoutConstraint.activate([
+            hostingView.leadingAnchor.constraint(equalTo: glassView.leadingAnchor),
+            hostingView.trailingAnchor.constraint(equalTo: glassView.trailingAnchor),
+            hostingView.topAnchor.constraint(equalTo: glassView.topAnchor),
+            hostingView.bottomAnchor.constraint(equalTo: glassView.bottomAnchor)
+        ])
+
+        return glassView
     }
 }

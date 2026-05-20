@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct SettingsView: View {
@@ -38,6 +39,12 @@ struct SettingsView: View {
                 }
             }
 
+            Button {
+                openTranslationLanguages()
+            } label: {
+                Label(L10n.text(.checkTranslationLanguages, language: language), systemImage: "globe")
+            }
+
             Picker(L10n.text(.panelPosition, language: language), selection: $settings.panelPlacement) {
                 Text(L10n.text(.nearMouse, language: language)).tag(SettingsStore.PanelPlacement.mouse)
                 Text(L10n.text(.screenCenter, language: language)).tag(SettingsStore.PanelPlacement.center)
@@ -62,7 +69,14 @@ struct SettingsView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+        .scrollContentBackground(.hidden)
+        .background(.clear)
         .padding(20)
         .frame(width: 460)
+    }
+
+    private func openTranslationLanguages() {
+        let translateAppURL = URL(fileURLWithPath: "/System/Applications/Translate.app")
+        NSWorkspace.shared.open(translateAppURL)
     }
 }
