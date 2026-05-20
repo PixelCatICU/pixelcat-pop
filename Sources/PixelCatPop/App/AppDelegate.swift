@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var viewModel = TranslationViewModel(settings: settings, history: history)
     private lazy var panelController = FloatingPanelController(viewModel: viewModel, settings: settings)
     private lazy var screenshotController = ScreenshotAnnotationController(settings: settings)
+    private lazy var recordingController = RecordingController(settings: settings)
     private let clipboardReader = ClipboardReader()
     private let triggerMonitor = ClipboardTriggerMonitor()
 
@@ -59,6 +60,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem(title: L10n.text(.inputTranslation, language: language), action: #selector(openInputTranslation), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: L10n.text(.translateClipboard, language: language), action: #selector(translateClipboard), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: L10n.text(.annotateScreenshot, language: language), action: #selector(annotateScreenshot), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: recordingMenuTitle(language: language), action: #selector(toggleScreenRecording), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: L10n.text(.settings, language: language), action: #selector(openSettings), keyEquivalent: ","))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: L10n.text(.quit, language: language), action: #selector(quit), keyEquivalent: "q"))
@@ -69,6 +71,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func refreshLocalizedChrome() {
         statusItem?.menu = makeStatusMenu()
         settingsWindow?.title = L10n.text(.settingsWindowTitle, language: settings.interfaceLanguage)
+    }
+
+    private func refreshRecordingMenuTitle() {
+        statusItem?.menu = makeStatusMenu()
+    }
+
+    private func recordingMenuTitle(language: AppLanguage) -> String {
+        L10n.text(recordingController.isRecording ? .stopScreenRecording : .startScreenRecording, language: language)
     }
 
     private func handleDoubleCopy() {
@@ -86,6 +96,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func annotateScreenshot() {
         screenshotController.start()
+    }
+
+    @objc private func toggleScreenRecording() {
+        recordingController.toggleRecording()
+        refreshRecordingMenuTitle()
     }
 
     @objc private func openSettings() {

@@ -22,6 +22,10 @@ enum L10n {
         case inputTranslation
         case translateClipboard
         case annotateScreenshot
+        case startScreenRecording
+        case stopScreenRecording
+        case screenRecordingSaved
+        case screenRecordingFailed
         case checkTranslationLanguages
         case settings
         case quit
@@ -103,6 +107,10 @@ enum L10n {
         case .inputTranslation: "输入翻译"
         case .translateClipboard: "翻译剪贴板"
         case .annotateScreenshot: "截图标注"
+        case .startScreenRecording: "开始录屏"
+        case .stopScreenRecording: "停止录屏"
+        case .screenRecordingSaved: "录屏已保存"
+        case .screenRecordingFailed: "录屏失败"
         case .checkTranslationLanguages: "检查语言包"
         case .settings: "设置..."
         case .quit: "退出"
@@ -144,6 +152,10 @@ enum L10n {
         case .inputTranslation: "Input Translation"
         case .translateClipboard: "Translate Clipboard"
         case .annotateScreenshot: "Annotate Screenshot"
+        case .startScreenRecording: "Start Screen Recording"
+        case .stopScreenRecording: "Stop Screen Recording"
+        case .screenRecordingSaved: "Screen recording saved"
+        case .screenRecordingFailed: "Screen recording failed"
         case .checkTranslationLanguages: "Check Languages"
         case .settings: "Settings..."
         case .quit: "Quit"

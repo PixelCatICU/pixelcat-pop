@@ -11,4 +11,9 @@ final class L10nTests: XCTestCase {
         XCTAssertEqual(L10n.text(.interfaceLanguage, languageCode: "en-US"), "Interface language")
         XCTAssertEqual(L10n.languageName(code: "zh-Hans", fallback: "Chinese", languageCode: "en-US"), "Chinese")
     }
+
+    func testLocalizesRecordingMenuItems() {
+        XCTAssertEqual(L10n.text(.startScreenRecording, languageCode: "zh-Hans"), "开始录屏")
+        XCTAssertEqual(L10n.text(.stopScreenRecording, languageCode: "en-US"), "Stop Screen Recording")
+    }
 }

@@ -37,6 +37,11 @@ PixelCat Pop 是一个原生 macOS 菜单栏翻译工具，使用 SwiftUI 和 Ap
 | 朗读文本 | 支持朗读输入内容和译文 |
 | 翻译历史 | 默认保留最近 20 条翻译记录 |
 | 多语言界面 | 设置界面支持中文 / English / 跟随系统 |
+| 录屏 | 从菜单栏开始/停止录制主屏幕画面，并将 `.mov` 保存到桌面 |
+| 录制音频 | 录制系统声音和麦克风声音 |
+| 交互音效 | 录制时播放鼠标点击声和键盘输入声，声音会进入系统音频轨道 |
+| 点击波纹 | 录制时鼠标点击位置显示扩散波纹 |
+| 输入区域 Zoom | 键盘输入时对当前输入区域显示短暂聚焦放大提示 |
 
 ## 翻译逻辑
 
@@ -67,6 +72,8 @@ PixelCat Pop 是一个原生 macOS 菜单栏翻译工具，使用 SwiftUI 和 Ap
 全局监听 `Command-C` 可能需要授予辅助功能权限。
 
 截图标注需要 macOS 15.2 或更新版本，并需要授予屏幕录制权限。PixelCat Pop 只在用户主动选择截图标注时截取所选区域，不会自动保存截图历史。
+
+录屏功能当前是第一版最小闭环：录制主屏幕画面、鼠标指针、系统声音和麦克风，输出 `.mov` 到桌面。录制期间会播放鼠标点击声和键盘输入声，鼠标点击会显示波纹，键盘输入会显示输入区域聚焦 Zoom。点击局部放大和更完整的输入区域画面放大后续继续增强。
 
 ## 构建
 
@@ -122,6 +129,8 @@ Sources/PixelCatPop/Clipboard/       剪贴板读取和双击 Command-C 触发�
 Sources/PixelCatPop/Settings/        设置存储和设置界面
 Sources/PixelCatPop/Shared/          共享模型、本地化、品牌资源和通用视图
 Sources/PixelCatPop/Screenshot/      截图选择、截图捕获和标注编辑器
+Sources/PixelCatPop/Recording/       录屏、系统声音、麦克风和视频写入
+Sources/PixelCatPop/InteractionEffects/ 鼠标点击声、键盘输入声、波纹和 Zoom 效果
 Sources/PixelCatPop/Translation/     翻译服务、语言路由、翻译面板和历史记录
 Sources/PixelCatPop/Resources/       图标和资源文件
 Tests/PixelCatPopTests/              按功能域组织的测试
