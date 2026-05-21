@@ -51,8 +51,10 @@ final class ScreenRecorder: NSObject, @unchecked Sendable {
         }
 
         let configuration = SCStreamConfiguration()
-        configuration.width = display.width
-        configuration.height = display.height
+        let videoWidth = display.width - display.width % 2
+        let videoHeight = display.height - display.height % 2
+        configuration.width = videoWidth
+        configuration.height = videoHeight
         configuration.minimumFrameInterval = CMTime(value: 1, timescale: 30)
         configuration.queueDepth = 6
         configuration.showsCursor = true
@@ -64,13 +66,14 @@ final class ScreenRecorder: NSObject, @unchecked Sendable {
         configuration.pixelFormat = kCVPixelFormatType_32BGRA
 
         let filter = SCContentFilter(display: display, excludingWindows: [])
-        let writer = try AVAssetWriter(outputURL: url, fileType: .mov)
+        let writer = try AVAssetWriter(outputURL: url, fileType: .mp4)
+        writer.shouldOptimizeForNetworkUse = true
         let input = AVAssetWriterInput(
             mediaType: .video,
             outputSettings: [
-                AVVideoCodecKey: AVVideoCodecType.h264,
-                AVVideoWidthKey: display.width,
-                AVVideoHeightKey: display.height
+                AVVideoCodecKey: AVVideoCodecType.hevc,
+                AVVideoWidthKey: videoWidth,
+                AVVideoHeightKey: videoHeight
             ]
         )
         input.expectsMediaDataInRealTime = true
@@ -142,6 +145,12 @@ final class ScreenRecorder: NSObject, @unchecked Sendable {
         }
 
         return try await withCheckedThrowingContinuation { continuation in
+            guard state.writer.status != .unknown else {
+                state.writer.cancelWriting()
+                continuation.resume(throwing: RecorderError.writerFailed)
+                return
+            }
+
             state.input.markAsFinished()
             state.systemAudioInput?.markAsFinished()
             state.microphoneInput?.markAsFinished()
@@ -201,14 +210,18 @@ extension ScreenRecorder: SCStreamOutput {
         guard isCompleteFrame(sampleBuffer), let input = videoInput else { return }
         guard startWriterIfNeeded(writer, sampleBuffer: sampleBuffer) else { return }
         guard input.isReadyForMoreMediaData else { return }
-        input.append(sampleBuffer)
+        if !input.append(sampleBuffer) {
+            isStopping = true
+        }
     }
 
     private func appendAudioSample(_ sampleBuffer: CMSampleBuffer, writer: AVAssetWriter, input: AVAssetWriterInput?) {
         guard let input else { return }
-        guard startWriterIfNeeded(writer, sampleBuffer: sampleBuffer) else { return }
+        guard writer.status == .writing else { return }
         guard input.isReadyForMoreMediaData else { return }
-        input.append(sampleBuffer)
+        if !input.append(sampleBuffer) {
+            isStopping = true
+        }
     }
 
     private func startWriterIfNeeded(_ writer: AVAssetWriter, sampleBuffer: CMSampleBuffer) -> Bool {

@@ -31,7 +31,8 @@ final class RecordingController {
         }
 
         Task {
-            guard await requestMicrophoneAccess() else {
+            let hasMicrophoneAccess = settings.recordsMicrophoneAudio ? await requestMicrophoneAccess() : true
+            guard hasMicrophoneAccess else {
                 showError(RecordingPermissionError.microphoneDenied)
                 return
             }
@@ -39,10 +40,19 @@ final class RecordingController {
             let outputURL = makeOutputURL()
             currentOutputURL = outputURL
             isRecording = true
-            interactionEffects.start()
+            interactionEffects.start(options: InteractionEffectsController.Options(
+                playsMouseClickSound: settings.playsMouseClickSound,
+                playsKeyboardInputSound: settings.playsKeyboardInputSound,
+                showsClickRipple: settings.showsClickRipple,
+                showsTypingZoom: settings.showsTypingZoom
+            ))
 
             do {
-                try await recorder.start(to: outputURL)
+                try await recorder.start(
+                    to: outputURL,
+                    includesSystemAudio: settings.recordsSystemAudio,
+                    includesMicrophone: settings.recordsMicrophoneAudio
+                )
             } catch {
                 isRecording = false
                 currentOutputURL = nil
@@ -74,7 +84,7 @@ final class RecordingController {
             ?? FileManager.default.homeDirectoryForCurrentUser
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd-HHmmss"
-        let fileName = "PixelCatPop-Recording-\(formatter.string(from: Date())).mov"
+        let fileName = "PixelCatPop-Recording-\(formatter.string(from: Date())).mp4"
         return desktop.appendingPathComponent(fileName)
     }
 
