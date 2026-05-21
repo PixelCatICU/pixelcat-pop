@@ -49,7 +49,10 @@ final class ScreenshotAnnotationController: NSObject {
     }
 
     private func openEditor(image: NSImage) {
-        let controller = ScreenshotEditorViewController(image: image)
+        let controller = ScreenshotEditorViewController(
+            image: image,
+            defaultAnnotationColor: settings.screenshotAnnotationColor.annotationColor
+        )
         let windowSize = Self.editorWindowSize(for: image)
         let window = NSWindow(
             contentRect: NSRect(origin: .zero, size: windowSize),
@@ -174,8 +177,12 @@ private final class ScreenshotSelectionSession {
     }
 
     func start() {
+        let snapRects = Self.windowSnapRects()
         windows = NSScreen.screens.map { screen in
-            let window = ScreenshotSelectionWindow(targetScreen: screen)
+            let screenSnapRects = snapRects
+                .map { $0.intersection(screen.frame) }
+                .filter { !$0.isNull && $0.width >= 24 && $0.height >= 24 }
+            let window = ScreenshotSelectionWindow(targetScreen: screen, snapRects: screenSnapRects)
             window.selectionView.onFinish = { [weak self, weak window] rect in
                 self?.finish(rect: rect, screen: window?.targetScreen)
             }
@@ -190,14 +197,67 @@ private final class ScreenshotSelectionSession {
         windows.removeAll()
         onFinish(rect, screen)
     }
+
+    private static func windowSnapRects() -> [NSRect] {
+        guard let windowInfo = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else {
+            return []
+        }
+
+        return windowInfo.compactMap { info -> NSRect? in
+            guard let layer = info[kCGWindowLayer as String] as? Int, layer == 0,
+                  let alpha = info[kCGWindowAlpha as String] as? Double, alpha > 0,
+                  let ownerName = info[kCGWindowOwnerName as String] as? String, ownerName != "PixelCatPop",
+                  let bounds = info[kCGWindowBounds as String] as? [String: Any],
+                  let x = (bounds["X"] as? NSNumber)?.doubleValue,
+                  let y = (bounds["Y"] as? NSNumber)?.doubleValue,
+                  let width = (bounds["Width"] as? NSNumber)?.doubleValue,
+                  let height = (bounds["Height"] as? NSNumber)?.doubleValue,
+                  width >= 48,
+                  height >= 48
+            else {
+                return nil
+            }
+
+            guard let screen = NSScreen.screens.first(where: { screen in
+                let appKitRect = NSRect(
+                    x: CGFloat(x),
+                    y: screen.frame.maxY - CGFloat(y) - CGFloat(height),
+                    width: CGFloat(width),
+                    height: CGFloat(height)
+                )
+                return screen.frame.intersects(appKitRect)
+            }) else {
+                return nil
+            }
+
+            return NSRect(
+                x: CGFloat(x),
+                y: screen.frame.maxY - CGFloat(y) - CGFloat(height),
+                width: CGFloat(width),
+                height: CGFloat(height)
+            )
+        }
+    }
+
+    fileprivate static func selectionRect(from screenRect: NSRect, on screen: NSScreen) -> NSRect {
+        NSRect(
+            x: screenRect.minX - screen.frame.minX,
+            y: screenRect.minY - screen.frame.minY,
+            width: screenRect.width,
+            height: screenRect.height
+        )
+    }
 }
 
 private final class ScreenshotSelectionWindow: NSWindow {
     let targetScreen: NSScreen
-    let selectionView = ScreenshotSelectionView()
+    let selectionView: ScreenshotSelectionView
 
-    init(targetScreen: NSScreen) {
+    init(targetScreen: NSScreen, snapRects: [NSRect]) {
         self.targetScreen = targetScreen
+        self.selectionView = ScreenshotSelectionView(snapRects: snapRects.map {
+            ScreenshotSelectionSession.selectionRect(from: $0, on: targetScreen)
+        })
         super.init(
             contentRect: targetScreen.frame,
             styleMask: [.borderless],
@@ -209,6 +269,7 @@ private final class ScreenshotSelectionWindow: NSWindow {
         level = .screenSaver
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         ignoresMouseEvents = false
+        acceptsMouseMovedEvents = true
         contentView = selectionView
     }
 
@@ -218,8 +279,19 @@ private final class ScreenshotSelectionWindow: NSWindow {
 private final class ScreenshotSelectionView: NSView {
     var onFinish: ((NSRect?) -> Void)?
 
+    private let snapRects: [NSRect]
     private var startPoint: NSPoint?
     private var currentRect: NSRect = .zero
+    private var snappedRect: NSRect?
+
+    init(snapRects: [NSRect]) {
+        self.snapRects = snapRects
+        super.init(frame: .zero)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
 
     override var acceptsFirstResponder: Bool { true }
 
@@ -234,15 +306,31 @@ private final class ScreenshotSelectionView: NSView {
         guard currentRect.width > 1, currentRect.height > 1 else { return }
         NSColor.clear.setFill()
         currentRect.fill(using: .clear)
-        CatppuccinPalette.blue.setStroke()
+        (snappedRect == nil ? CatppuccinPalette.blue : CatppuccinPalette.mauve).setStroke()
         let path = NSBezierPath(rect: currentRect)
         path.lineWidth = 2
         path.stroke()
     }
 
+    override func mouseMoved(with event: NSEvent) {
+        guard startPoint == nil else { return }
+        let point = convert(event.locationInWindow, from: nil)
+        snappedRect = snapRect(containing: point)
+        currentRect = snappedRect ?? .zero
+        needsDisplay = true
+    }
+
     override func mouseDown(with event: NSEvent) {
-        startPoint = convert(event.locationInWindow, from: nil)
-        currentRect = .zero
+        let point = convert(event.locationInWindow, from: nil)
+        if let snapRect = snapRect(containing: point) {
+            snappedRect = snapRect
+            currentRect = snapRect
+            startPoint = nil
+        } else {
+            snappedRect = nil
+            startPoint = point
+            currentRect = .zero
+        }
         needsDisplay = true
     }
 
@@ -255,6 +343,7 @@ private final class ScreenshotSelectionView: NSView {
             width: abs(startPoint.x - point.x),
             height: abs(startPoint.y - point.y)
         )
+        snappedRect = nil
         needsDisplay = true
     }
 
@@ -273,6 +362,14 @@ private final class ScreenshotSelectionView: NSView {
         } else {
             super.keyDown(with: event)
         }
+    }
+
+    private func snapRect(containing point: NSPoint) -> NSRect? {
+        snapRects
+            .filter { $0.insetBy(dx: -4, dy: -4).contains(point) }
+            .min { lhs, rhs in
+                lhs.width * lhs.height < rhs.width * rhs.height
+            }
     }
 }
 
@@ -386,6 +483,12 @@ private enum AnnotationItem {
         }
     }
 
+    mutating func updateMosaicStrength(_ strength: CGFloat) {
+        if case .mosaic(let rect, _) = self {
+            self = .mosaic(rect, strength)
+        }
+    }
+
     private func resizedRect(from rect: CGRect, to point: CGPoint) -> CGRect {
         CGRect(
             x: rect.minX,
@@ -418,9 +521,9 @@ private final class ScreenshotEditorViewController: NSViewController {
     private var paddedDocumentView: PaddedCanvasDocumentView?
     private var zoomLabel: NSTextField?
 
-    init(image: NSImage) {
+    init(image: NSImage, defaultAnnotationColor: NSColor) {
         self.image = image
-        self.canvasView = ScreenshotAnnotationCanvasView(image: image)
+        self.canvasView = ScreenshotAnnotationCanvasView(image: image, annotationColor: defaultAnnotationColor)
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -513,6 +616,9 @@ private final class ScreenshotEditorViewController: NSViewController {
         canvasView.onToolChange = { [weak self] _ in
             self?.updateToolSelection()
         }
+        canvasView.onMosaicStrengthChange = { [weak self] strength in
+            self?.mosaicStrengthSlider?.doubleValue = Double(strength)
+        }
         canvasView.onTextSizeChange = { [weak self] fontSize in
             self?.textSizeSlider?.doubleValue = Double(fontSize)
         }
@@ -562,6 +668,7 @@ private final class ScreenshotEditorViewController: NSViewController {
         let slider = NSSlider(value: Double(canvasView.mosaicBlockSize), minValue: 6, maxValue: 28, target: self, action: #selector(changeMosaicStrength(_:)))
         slider.toolTip = "Mosaic Strength: larger blocks hide more detail"
         slider.controlSize = .small
+        slider.isContinuous = true
         slider.frame = NSRect(x: 0, y: 0, width: 82, height: 24)
         slider.isHidden = canvasView.tool != .mosaic
         mosaicStrengthSlider = slider
@@ -707,7 +814,7 @@ private final class CenteringClipView: NSClipView {
             rect.origin.x = (documentView.frame.width - bounds.width) / 2
         }
         if documentView.frame.height < bounds.height {
-            rect.origin.y = (documentView.frame.height - bounds.height) / 2
+            rect.origin.y = 0
         }
 
         return rect
@@ -750,7 +857,7 @@ private final class PaddedCanvasDocumentView: NSView {
         )
         canvasView.frame = NSRect(
             x: max(padding, (bounds.width - canvasSize.width) / 2),
-            y: max(padding, (bounds.height - canvasSize.height) / 2),
+            y: padding,
             width: canvasSize.width,
             height: canvasSize.height
         )
@@ -913,9 +1020,15 @@ private final class ScreenshotAnnotationCanvasView: NSView {
             applyTextSizeToSelectedItem()
         }
     }
-    var mosaicBlockSize: CGFloat = 12
+    var mosaicBlockSize: CGFloat = 12 {
+        didSet {
+            applyMosaicStrengthToSelectedItem()
+            onMosaicStrengthChange?(mosaicBlockSize)
+        }
+    }
     var onZoomChange: ((CGFloat) -> Void)?
     var onToolChange: ((AnnotationTool) -> Void)?
+    var onMosaicStrengthChange: ((CGFloat) -> Void)?
     var onTextSizeChange: ((CGFloat) -> Void)?
     var imageSize: NSSize { image.size }
 
@@ -931,8 +1044,9 @@ private final class ScreenshotAnnotationCanvasView: NSView {
     private var editingTextIndex: Int?
     private var zoomScale: CGFloat = 1
 
-    init(image: NSImage) {
+    init(image: NSImage, annotationColor: NSColor = CatppuccinPalette.red) {
         self.image = image
+        self.annotationColor = annotationColor
         super.init(frame: NSRect(origin: .zero, size: image.size))
         wantsLayer = true
     }
@@ -1010,6 +1124,7 @@ private final class ScreenshotAnnotationCanvasView: NSView {
 
         if let index = hitItem(at: point) {
             selectedIndex = index
+            syncControlsForSelectedItem()
             if event.clickCount == 2, case .text = items[index] {
                 beginEditingText(at: index)
                 return
@@ -1179,6 +1294,27 @@ private final class ScreenshotAnnotationCanvasView: NSView {
         pushUndo()
         items[selectedIndex].updateFontSize(annotationTextSize)
         needsDisplay = true
+    }
+
+    private func applyMosaicStrengthToSelectedItem() {
+        guard let selectedIndex, items.indices.contains(selectedIndex),
+              case .mosaic = items[selectedIndex]
+        else { return }
+        items[selectedIndex].updateMosaicStrength(mosaicBlockSize)
+        needsDisplay = true
+    }
+
+    private func syncControlsForSelectedItem() {
+        guard let selectedIndex, items.indices.contains(selectedIndex) else { return }
+        switch items[selectedIndex] {
+        case .mosaic(_, let strength):
+            mosaicBlockSize = strength
+        case .text(_, _, _, let fontSize):
+            annotationTextSize = fontSize
+            onTextSizeChange?(fontSize)
+        case .rectangle, .arrow:
+            break
+        }
     }
 
     private func pushUndo() {
@@ -1379,5 +1515,26 @@ private extension NSColor {
             && abs(lhs.greenComponent - rhs.greenComponent) < 0.01
             && abs(lhs.blueComponent - rhs.blueComponent) < 0.01
             && abs(lhs.alphaComponent - rhs.alphaComponent) < 0.01
+    }
+}
+
+private extension SettingsStore.ScreenshotAnnotationColor {
+    var annotationColor: NSColor {
+        switch self {
+        case .red:
+            CatppuccinPalette.red
+        case .peach:
+            CatppuccinPalette.peach
+        case .yellow:
+            CatppuccinPalette.yellow
+        case .green:
+            CatppuccinPalette.green
+        case .teal:
+            CatppuccinPalette.teal
+        case .blue:
+            CatppuccinPalette.blue
+        case .mauve:
+            CatppuccinPalette.mauve
+        }
     }
 }
