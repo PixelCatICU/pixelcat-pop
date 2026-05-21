@@ -66,6 +66,7 @@ final class SystemMonitor {
         }
         let pageSize = UInt64(hostPageSize)
         let usedPages = UInt64(stats.active_count)
+            + UInt64(stats.inactive_count)
             + UInt64(stats.wire_count)
             + UInt64(stats.compressor_page_count)
         return min(1, max(0, Double(usedPages * pageSize) / Double(totalMemory)))

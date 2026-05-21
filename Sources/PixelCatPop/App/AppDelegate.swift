@@ -2,6 +2,12 @@ import AppKit
 import Combine
 import SwiftUI
 
+private struct StatusBarColumn {
+    let top: String
+    let bottom: String
+    let width: CGFloat
+}
+
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let settings = SettingsStore()
@@ -9,21 +15,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var viewModel = TranslationViewModel(settings: settings, history: history)
     private lazy var panelController = FloatingPanelController(viewModel: viewModel, settings: settings)
     private lazy var screenshotController = ScreenshotAnnotationController(settings: settings)
-    private lazy var recordingController = RecordingController(settings: settings)
-    private let systemMonitor = SystemMonitor()
+    private var recordingController: RecordingController?
+    private lazy var systemMonitor = SystemMonitor()
     private let clipboardReader = ClipboardReader()
     private let triggerMonitor = ClipboardTriggerMonitor()
 
     private var statusItem: NSStatusItem?
     private var settingsWindow: NSWindow?
+    private var appCleanerWindow: NSWindow?
     private var settingsCancellable: AnyCancellable?
     private var avatarMetricCancellable: AnyCancellable?
+    private var systemMonitorRefreshCancellable: AnyCancellable?
+    private var systemMenuVisibilityCancellables: [AnyCancellable] = []
     private var systemMonitorTimer: Timer?
     private var systemSnapshot: SystemSnapshot?
-    private weak var cpuMenuItem: NSMenuItem?
-    private weak var memoryMenuItem: NSMenuItem?
-    private weak var diskMenuItem: NSMenuItem?
-    private weak var networkMenuItem: NSMenuItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         ProcessInfo.processInfo.disableAutomaticTermination("PixelCat Pop runs as a menu bar utility.")
@@ -39,6 +44,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.refreshStatusBarImage()
             }
         }
+        systemMonitorRefreshCancellable = settings.$systemMonitorRefreshInterval.dropFirst().sink { [weak self] _ in
+            Task { @MainActor in
+                self?.startSystemMonitoring()
+            }
+        }
+        systemMenuVisibilityCancellables = [
+            settings.$showsCPUInMenu.dropFirst().sink { [weak self] _ in
+                Task { @MainActor in self?.refreshSystemMonitorState() }
+            },
+            settings.$showsMemoryInMenu.dropFirst().sink { [weak self] _ in
+                Task { @MainActor in self?.refreshSystemMonitorState() }
+            },
+            settings.$showsDiskInMenu.dropFirst().sink { [weak self] _ in
+                Task { @MainActor in self?.refreshSystemMonitorState() }
+            },
+            settings.$showsNetworkInMenu.dropFirst().sink { [weak self] _ in
+                Task { @MainActor in self?.refreshSystemMonitorState() }
+            }
+        ]
         startSystemMonitoring()
 
         triggerMonitor.onDoubleCopy = { [weak self] in
@@ -62,8 +86,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func installStatusMenu() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        item.button?.image = statusBarImage()
-        item.button?.imagePosition = .imageOnly
+        updateStatusBarButton(item.button)
 
         item.menu = makeStatusMenu()
         statusItem = item
@@ -76,21 +99,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem(title: L10n.text(.translateClipboard, language: language), action: #selector(translateClipboard), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: L10n.text(.annotateScreenshot, language: language), action: #selector(annotateScreenshot), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: recordingMenuTitle(language: language), action: #selector(toggleScreenRecording), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: L10n.text(.appCleaner, language: language), action: #selector(openAppCleaner), keyEquivalent: ""))
         menu.addItem(.separator())
-        let cpu = disabledMenuItem("")
-        let memory = disabledMenuItem("")
-        let disk = disabledMenuItem("")
-        let network = disabledMenuItem("")
-        menu.addItem(cpu)
-        menu.addItem(memory)
-        menu.addItem(disk)
-        menu.addItem(network)
-        cpuMenuItem = cpu
-        memoryMenuItem = memory
-        diskMenuItem = disk
-        networkMenuItem = network
-        updateSystemMenuItems(language: language)
         menu.addItem(NSMenuItem(title: L10n.text(.settings, language: language), action: #selector(openSettings), keyEquivalent: ","))
+#if DEBUG
+        menu.addItem(NSMenuItem(title: L10n.text(.restart, language: language), action: #selector(restart), keyEquivalent: "r"))
+#endif
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: L10n.text(.quit, language: language), action: #selector(quit), keyEquivalent: "q"))
         menu.items.forEach { $0.target = self }
@@ -100,6 +114,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func refreshLocalizedChrome() {
         statusItem?.menu = makeStatusMenu()
         settingsWindow?.title = L10n.text(.settingsWindowTitle, language: settings.interfaceLanguage)
+        appCleanerWindow?.title = L10n.text(.appCleanerWindowTitle, language: settings.interfaceLanguage)
         refreshStatusBarImage()
     }
 
@@ -107,48 +122,66 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem?.menu = makeStatusMenu()
     }
 
-    private func recordingMenuTitle(language: AppLanguage) -> String {
-        L10n.text(recordingController.isRecording ? .stopScreenRecording : .startScreenRecording, language: language)
+    private func refreshSystemMonitorState() {
+        startSystemMonitoring()
     }
 
-    private func disabledMenuItem(_ title: String) -> NSMenuItem {
-        let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
-        item.isEnabled = false
-        return item
+    private func recordingMenuTitle(language: AppLanguage) -> String {
+        L10n.text(recordingController?.isRecording == true ? .stopScreenRecording : .startScreenRecording, language: language)
     }
 
     private func startSystemMonitoring() {
+        systemMonitorTimer?.invalidate()
+        systemMonitorTimer = nil
+        guard shouldSampleSystemMonitor else {
+            systemSnapshot = nil
+            refreshStatusBarButton()
+            return
+        }
+
         updateSystemSnapshot()
-        systemMonitorTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+        let interval = settings.systemMonitorRefreshInterval.seconds
+        let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.updateSystemSnapshot()
             }
         }
+        timer.tolerance = settings.systemMonitorRefreshInterval == .realtime ? 0.1 : min(5, interval * 0.2)
+        RunLoop.main.add(timer, forMode: .common)
+        systemMonitorTimer = timer
     }
 
     private func updateSystemSnapshot() {
-        systemSnapshot = systemMonitor.sample()
-        updateSystemMenuItems(language: settings.interfaceLanguage)
-        refreshStatusBarImage()
-    }
-
-    private func updateSystemMenuItems(language: AppLanguage) {
-        guard let snapshot = systemSnapshot else {
-            cpuMenuItem?.title = "\(L10n.text(.cpuUsage, language: language)): --"
-            memoryMenuItem?.title = "\(L10n.text(.memoryUsage, language: language)): --"
-            diskMenuItem?.title = "\(L10n.text(.diskUsage, language: language)): --"
-            networkMenuItem?.title = "\(L10n.text(.networkUsage, language: language)): --"
+        guard shouldSampleSystemMonitor else {
+            systemSnapshot = nil
+            refreshStatusBarButton()
             return
         }
+        systemSnapshot = systemMonitor.sample()
+        refreshStatusBarButton()
+    }
 
-        cpuMenuItem?.title = "\(L10n.text(.cpuUsage, language: language)): \(formatPercent(snapshot.cpuUsage))"
-        memoryMenuItem?.title = "\(L10n.text(.memoryUsage, language: language)): \(formatPercent(snapshot.memoryUsage))"
-        diskMenuItem?.title = "\(L10n.text(.diskUsage, language: language)): \(formatPercent(snapshot.diskUsage))"
-        networkMenuItem?.title = "\(L10n.text(.networkUsage, language: language)): ↓ \(formatBytesPerSecond(snapshot.networkDownloadRate))  ↑ \(formatBytesPerSecond(snapshot.networkUploadRate))"
+    private var shouldSampleSystemMonitor: Bool {
+        settings.showsCPUInMenu
+            || settings.showsMemoryInMenu
+            || settings.showsDiskInMenu
+            || settings.showsNetworkInMenu
     }
 
     private func refreshStatusBarImage() {
-        statusItem?.button?.image = statusBarImage()
+        refreshStatusBarButton()
+    }
+
+    private func refreshStatusBarButton() {
+        updateStatusBarButton(statusItem?.button)
+    }
+
+    private func updateStatusBarButton(_ button: NSStatusBarButton?) {
+        guard let button else { return }
+        button.title = ""
+        button.attributedTitle = NSAttributedString(string: "")
+        button.image = renderedStatusBarImage()
+        button.imagePosition = .imageOnly
     }
 
     private func statusBarImage() -> NSImage {
@@ -171,15 +204,104 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         "\(Int((ratio * 100).rounded()))%"
     }
 
-    private func formatBytesPerSecond(_ bytesPerSecond: UInt64) -> String {
+    private func renderedStatusBarImage() -> NSImage {
+        let icon = statusBarImage()
+        let columns = statusBarColumns()
+        guard !columns.isEmpty else { return icon }
+
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .right
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.monospacedDigitSystemFont(ofSize: 8, weight: .semibold),
+            .foregroundColor: NSColor.labelColor,
+            .paragraphStyle: paragraph
+        ]
+        let iconSize = NSSize(width: 18, height: 18)
+        let spacing: CGFloat = 4
+        let columnSpacing: CGFloat = 4
+        let canvasHeight: CGFloat = 22
+        let lineHeight: CGFloat = 8.5
+        let textHeight = lineHeight * 2
+        let textWidth = columns.reduce(CGFloat(0)) { $0 + $1.width }
+            + columnSpacing * CGFloat(max(0, columns.count - 1))
+        let canvasWidth = iconSize.width + spacing + textWidth
+        let image = NSImage(size: NSSize(width: canvasWidth, height: canvasHeight))
+
+        image.lockFocus()
+        icon.draw(
+            in: NSRect(
+                x: 0,
+                y: (canvasHeight - iconSize.height) / 2,
+                width: iconSize.width,
+                height: iconSize.height
+            ),
+            from: .zero,
+            operation: .sourceOver,
+            fraction: 1
+        )
+
+        let textX = iconSize.width + spacing
+        let textBottomY = (canvasHeight - textHeight) / 2
+        var columnX = textX
+        for column in columns {
+            (column.top as NSString).draw(
+                with: NSRect(x: columnX, y: textBottomY + lineHeight, width: column.width, height: lineHeight),
+                options: [.usesLineFragmentOrigin],
+                attributes: attributes
+            )
+            (column.bottom as NSString).draw(
+                with: NSRect(x: columnX, y: textBottomY, width: column.width, height: lineHeight),
+                options: [.usesLineFragmentOrigin],
+                attributes: attributes
+            )
+            columnX += column.width + columnSpacing
+        }
+        image.unlockFocus()
+        image.isTemplate = false
+        return image
+    }
+
+    private func statusBarColumns() -> [StatusBarColumn] {
+        guard let snapshot = systemSnapshot else { return [] }
+
+        var columns: [StatusBarColumn] = []
+        if settings.showsCPUInMenu || settings.showsMemoryInMenu {
+            columns.append(.init(
+                top: settings.showsCPUInMenu ? "CPU \(formatPercent(snapshot.cpuUsage))" : "",
+                bottom: settings.showsMemoryInMenu ? "MEM \(formatPercent(snapshot.memoryUsage))" : "",
+                width: 48
+            ))
+        }
+        if settings.showsNetworkInMenu {
+            columns.append(.init(
+                top: "\(formatCompactBytesPerSecond(snapshot.networkUploadRate)) ↑",
+                bottom: "\(formatCompactBytesPerSecond(snapshot.networkDownloadRate)) ↓",
+                width: 48
+            ))
+        }
+        if settings.showsDiskInMenu {
+            columns.append(.init(
+                top: "DSK",
+                bottom: formatPercent(snapshot.diskUsage),
+                width: 24
+            ))
+        }
+        return columns
+    }
+
+    private func formatCompactBytesPerSecond(_ bytesPerSecond: UInt64) -> String {
         let value = Double(bytesPerSecond)
         if value >= 1_048_576 {
-            return String(format: "%.1f MB/s", value / 1_048_576)
+            return String(format: "%.1fM/s", value / 1_048_576)
         }
         if value >= 1_024 {
-            return String(format: "%.0f KB/s", value / 1_024)
+            let kilobytes = value / 1_024
+            if kilobytes >= 1_024 {
+                return String(format: "%.1fM/s", kilobytes / 1_024)
+            }
+            return String(format: "%.1fK/s", kilobytes)
         }
-        return "\(bytesPerSecond) B/s"
+        return "\(bytesPerSecond)B/s"
     }
 
     private func handleDoubleCopy() {
@@ -200,7 +322,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func toggleScreenRecording() {
-        recordingController.toggleRecording()
+        if recordingController == nil {
+            recordingController = RecordingController(settings: settings)
+        }
+        recordingController?.toggleRecording()
         refreshRecordingMenuTitle()
     }
 
@@ -208,14 +333,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if settingsWindow == nil {
             let view = SettingsView(settings: settings, history: history)
             let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 500, height: 360),
-                styleMask: [.titled, .closable, .miniaturizable],
+                contentRect: NSRect(x: 0, y: 0, width: 760, height: 560),
+                styleMask: [.titled, .closable, .miniaturizable, .resizable],
                 backing: .buffered,
                 defer: false
             )
             window.title = L10n.text(.settingsWindowTitle, language: settings.interfaceLanguage)
             window.backgroundColor = .clear
             window.isOpaque = false
+            window.isReleasedWhenClosed = false
             window.center()
             window.contentView = makeGlassContentView(rootView: view, material: .sidebar, blendingMode: .withinWindow)
             settingsWindow = window
@@ -225,9 +351,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
 
+    @objc private func openAppCleaner() {
+        if appCleanerWindow == nil {
+            let view = AppCleanerView(settings: settings)
+            let window = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 720, height: 520),
+                styleMask: [.titled, .closable, .miniaturizable, .resizable],
+                backing: .buffered,
+                defer: false
+            )
+            window.title = L10n.text(.appCleanerWindowTitle, language: settings.interfaceLanguage)
+            window.backgroundColor = .clear
+            window.isOpaque = false
+            window.isReleasedWhenClosed = false
+            window.center()
+            window.contentView = makeGlassContentView(rootView: view, material: .sidebar, blendingMode: .withinWindow)
+            appCleanerWindow = window
+        }
+
+        appCleanerWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
     @objc private func quit() {
         NSApp.terminate(nil)
     }
+
+#if DEBUG
+    @objc private func restart() {
+        let bundleURL = Bundle.main.bundleURL
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = false
+        configuration.createsNewApplicationInstance = true
+
+        NSWorkspace.shared.openApplication(at: bundleURL, configuration: configuration) { _, error in
+            if error == nil {
+                Task { @MainActor in
+                    NSApp.terminate(nil)
+                }
+            }
+        }
+    }
+#endif
 
     private func makeGlassContentView<Content: View>(
         rootView: Content,

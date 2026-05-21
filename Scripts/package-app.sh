@@ -53,7 +53,9 @@ cat > "$CONTENTS_DIR/Info.plist" <<'PLIST'
   <key>NSHighResolutionCapable</key>
   <true/>
   <key>NSScreenCaptureUsageDescription</key>
-  <string>PixelCat Pop needs screen capture access to let you select, annotate, copy, and save screenshots.</string>
+  <string>PixelCat Pop needs screen capture access to let you select, annotate, copy, save screenshots, and record your screen.</string>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>PixelCat Pop needs microphone access when you enable microphone audio in screen recordings.</string>
 </dict>
 </plist>
 PLIST

@@ -5,28 +5,45 @@ import QuartzCore
 
 @MainActor
 final class InteractionEffectsController {
+    struct Options {
+        let playsMouseClickSound: Bool
+        let playsKeyboardInputSound: Bool
+        let showsClickRipple: Bool
+        let showsTypingZoom: Bool
+    }
+
     private let soundPlayer = InteractionSoundPlayer()
     private let rippleOverlay = ClickRippleOverlay()
     private let typingZoomOverlay = TypingZoomOverlay()
     private var mouseMonitor: Any?
     private var keyboardMonitor: Any?
 
-    func start() {
+    func start(options: Options) {
         guard mouseMonitor == nil, keyboardMonitor == nil else { return }
-        soundPlayer.prepare()
+        if options.playsMouseClickSound || options.playsKeyboardInputSound {
+            soundPlayer.prepare()
+        }
 
         mouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
             Task { @MainActor in
-                self?.soundPlayer.playMouseClick()
-                self?.rippleOverlay.show(at: NSEvent.mouseLocation)
+                if options.playsMouseClickSound {
+                    self?.soundPlayer.playMouseClick()
+                }
+                if options.showsClickRipple {
+                    self?.rippleOverlay.show(at: NSEvent.mouseLocation)
+                }
             }
         }
 
         keyboardMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
             Task { @MainActor in
                 guard Self.isTypingEvent(event) else { return }
-                self?.soundPlayer.playKeyPress()
-                self?.typingZoomOverlay.show(fallbackPoint: NSEvent.mouseLocation)
+                if options.playsKeyboardInputSound {
+                    self?.soundPlayer.playKeyPress()
+                }
+                if options.showsTypingZoom {
+                    self?.typingZoomOverlay.show(fallbackPoint: NSEvent.mouseLocation)
+                }
             }
         }
     }

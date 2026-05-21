@@ -42,6 +42,7 @@ PixelCat Pop 是一个原生 macOS 菜单栏翻译工具，使用 SwiftUI 和 Ap
 | 交互音效 | 录制时播放鼠标点击声和键盘输入声，声音会进入系统音频轨道 |
 | 点击波纹 | 录制时鼠标点击位置显示扩散波纹 |
 | 输入区域 Zoom | 键盘输入时对当前输入区域显示短暂聚焦放大提示 |
+| 应用清理 | 选择或拖入 `.app` 后扫描相关偏好设置、缓存、容器、日志和应用支持文件，确认后移到废纸篓 |
 
 ## 翻译逻辑
 
@@ -74,6 +75,17 @@ PixelCat Pop 是一个原生 macOS 菜单栏翻译工具，使用 SwiftUI 和 Ap
 截图标注需要 macOS 15.2 或更新版本，并需要授予屏幕录制权限。PixelCat Pop 只在用户主动选择截图标注时截取所选区域，不会自动保存截图历史。
 
 录屏功能当前是第一版最小闭环：录制主屏幕画面、鼠标指针、系统声音和麦克风，输出 `.mov` 到桌面。录制期间会播放鼠标点击声和键盘输入声，鼠标点击会显示波纹，键盘输入会显示输入区域聚焦 Zoom。点击局部放大和更完整的输入区域画面放大后续继续增强。
+
+应用清理功能参考 AppCleaner 的核心流程：用户主动选择或拖入应用，PixelCat Pop 根据 Bundle ID 扫描用户目录下常见残留位置，展示候选文件列表，确认后使用系统废纸篓而不是直接删除。第一版覆盖：
+
+- 应用本体。
+- `~/Library/Application Support`
+- `~/Library/Caches`
+- `~/Library/Preferences`
+- `~/Library/Saved Application State`
+- `~/Library/Logs`
+- `~/Library/Containers`
+- `~/Library/Group Containers`
 
 ## 构建
 
@@ -125,6 +137,7 @@ swift run PixelCatPop
 
 ```text
 Sources/PixelCatPop/App/             应用入口、AppDelegate、菜单栏生命周期
+Sources/PixelCatPop/AppCleaner/      应用卸载残留扫描、勾选确认和移到废纸篓
 Sources/PixelCatPop/Clipboard/       剪贴板读取和双击 Command-C 触发监听
 Sources/PixelCatPop/Settings/        设置存储和设置界面
 Sources/PixelCatPop/Shared/          共享模型、本地化、品牌资源和通用视图
